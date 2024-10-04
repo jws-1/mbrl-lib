@@ -140,9 +140,12 @@ class GaussianMLP(Ensemble):
     def _default_forward(
         self, x: torch.Tensor, only_elite: bool = False, **_kwargs
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        # print(f"Default forward input shape: {x.shape}")
         self._maybe_toggle_layers_use_only_elite(only_elite)
         x = self.hidden_layers(x)
+        # print(f"Hidden layers output shape: {x.shape}")
         mean_and_logvar = self.mean_and_logvar(x)
+        # print(f"Mean and logvar shape: {mean_and_logvar.shape}")
         self._maybe_toggle_layers_use_only_elite(only_elite)
         if self.deterministic:
             return mean_and_logvar, None
@@ -182,6 +185,7 @@ class GaussianMLP(Ensemble):
         rng: Optional[torch.Generator] = None,
         propagation_indices: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        # print(f"Forward ensemble input shape: {x.shape}")
         if self.propagation_method is None:
             mean, logvar = self._default_forward(x, only_elite=False)
             if self.num_members == 1:
@@ -189,6 +193,16 @@ class GaussianMLP(Ensemble):
                 logvar = logvar[0] if logvar is not None else None
             return mean, logvar
         assert x.ndim == 2
+        if x.shape[0] == 1:
+            if self.propagation_method == "random_model":
+                # choose a SINGLE model at random
+                model_indices = torch.randint(
+                    0, model_len, (model_len,), device=self.device
+                )
+
+            elif self.propagation_method == "expectation":
+                mean, logvar = self._default_forward(x, only_elite=True)
+                return mean.mean(dim=0), logvar.mean(dim=0)
         model_len = (
             len(self.elite_models) if self.elite_models is not None else len(self)
         )
@@ -274,6 +288,7 @@ class GaussianMLP(Ensemble):
             the output to :func:`mbrl.util.math.propagate`.
 
         """
+        # print(f"Model input shape: {x.shape}")
         if use_propagation:
             return self._forward_ensemble(
                 x, rng=rng, propagation_indices=propagation_indices
