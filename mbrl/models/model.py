@@ -464,7 +464,7 @@ class Ensemble(Model, abc.ABC):
                 )[0],
                 model_state,
             )
-        assert rng is not None
+        # assert rng is not None
         means, logvars = self.forward(
             model_input, rng=rng, propagation_indices=model_state["propagation_indices"]
         )

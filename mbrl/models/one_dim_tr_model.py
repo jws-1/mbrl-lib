@@ -288,6 +288,19 @@ class OneDTransitionRewardModel(Model):
         next_model_state["obs"] = next_observs
         return next_observs, rewards, None, next_model_state
 
+    def dist(
+        self,
+        state: torch.Tensor,
+        act: torch.Tensor,
+        rng: Optional[torch.Generator] = None,
+    ) -> torch.distributions.Distribution:
+        obs = model_util.to_tensor(state).to(self.device)
+        model_in = self._get_model_input(obs, act)
+        means, logvars = self.forward(model_in, rng=rng, propagation_indices=None)
+        variances = logvars.exp()
+        stds = torch.sqrt(variances)
+        return torch.distributions.Normal(means, stds)
+
     def reset(
         self, obs: torch.Tensor, rng: Optional[torch.Generator] = None
     ) -> Dict[str, torch.Tensor]:

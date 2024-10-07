@@ -17,6 +17,8 @@ from mbrl.util.replay_buffer import BootstrapIterator, TransitionIterator
 
 from .model import Model
 
+from torch.utils.tensorboard import SummaryWriter
+
 MODEL_LOG_FORMAT = [
     ("train_iteration", "I", "int"),
     ("epoch", "E", "int"),
@@ -47,9 +49,14 @@ class ModelTrainer:
         weight_decay: float = 1e-5,
         optim_eps: float = 1e-8,
         logger: Optional[Logger] = None,
+        tensorboard_logger: Optional[SummaryWriter] = None,
+        log_group_name: Optional[str] = None,
     ):
         self.model = model
         self._train_iteration = 0
+
+        if log_group_name is not None:
+            self._LOG_GROUP_NAME = log_group_name
 
         self.logger = logger
         if self.logger:
@@ -59,6 +66,7 @@ class ModelTrainer:
                 color="blue",
                 dump_frequency=1,
             )
+        self.tensorboard_logger = tensorboard_logger
 
         self.optimizer = optim.Adam(
             self.model.parameters(),
@@ -183,16 +191,43 @@ class ModelTrainer:
                         "iteration": self._train_iteration,
                         "epoch": epoch,
                         "train_dataset_size": dataset_train.num_stored,
-                        "val_dataset_size": dataset_val.num_stored
-                        if dataset_val is not None
-                        else 0,
+                        "val_dataset_size": (
+                            dataset_val.num_stored if dataset_val is not None else 0
+                        ),
                         "model_loss": total_avg_loss,
                         "model_val_score": model_val_score,
-                        "model_best_val_score": best_val_score.mean()
-                        if best_val_score is not None
-                        else 0,
+                        "model_best_val_score": (
+                            best_val_score.mean() if best_val_score is not None else 0
+                        ),
                     },
                 )
+            if self.tensorboard_logger is not None:
+                self.tensorboard_logger.add_scalar(
+                    f"{self._LOG_GROUP_NAME}/train_loss",
+                    total_avg_loss,
+                    self._train_iteration,
+                )
+                self.tensorboard_logger.add_scalar(
+                    f"{self._LOG_GROUP_NAME}/val_score",
+                    model_val_score,
+                    self._train_iteration,
+                )
+                self.tensorboard_logger.add_scalar(
+                    f"{self._LOG_GROUP_NAME}/best_val_score",
+                    best_val_score.mean() if best_val_score is not None else 0,
+                    self._train_iteration,
+                )
+                self.tensorboard_logger.add_scalar(
+                    f"{self._LOG_GROUP_NAME}/train_dataset_size",
+                    dataset_train.num_stored,
+                    self._train_iteration,
+                )
+                self.tensorboard_logger.add_scalar(
+                    f"{self._LOG_GROUP_NAME}/val_dataset_size",
+                    dataset_val.num_stored if dataset_val is not None else 0,
+                    self._train_iteration,
+                )
+
             if callback:
                 callback(
                     self.model,
