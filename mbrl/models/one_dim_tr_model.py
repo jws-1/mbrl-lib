@@ -299,6 +299,8 @@ class OneDTransitionRewardModel(Model):
         means, logvars = self.forward(model_in, rng=rng, propagation_indices=None)
         variances = logvars.exp()
         stds = torch.sqrt(variances)
+        if self.target_is_delta:
+            means += obs
         return torch.distributions.Normal(means, stds)
 
     def reset(
