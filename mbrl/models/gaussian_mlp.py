@@ -202,7 +202,9 @@ class GaussianMLP(Ensemble):
 
             elif self.propagation_method == "expectation":
                 mean, logvar = self._default_forward(x, only_elite=True)
-                return mean.mean(dim=0), logvar.mean(dim=0)
+                return mean.mean(dim=0), (
+                    logvar.mean(dim=0) if logvar is not None else None
+                )
         model_len = (
             len(self.elite_models) if self.elite_models is not None else len(self)
         )
