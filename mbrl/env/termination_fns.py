@@ -44,6 +44,33 @@ def cartpole(act: torch.Tensor, next_obs: torch.Tensor) -> torch.Tensor:
     return done
 
 
+def mountain_car(act: torch.Tensor, next_obs: torch.Tensor) -> torch.Tensor:
+    assert len(next_obs.shape) == 2
+
+    not_done = torch.isfinite(next_obs).all(-1) * (next_obs[:, 0] < 8.88888836)
+    done = ~not_done
+
+    done = done[:, None]
+
+    return done
+
+
+def acrobot(act: torch.Tensor, next_obs: torch.Tensor) -> torch.Tensor:
+    assert len(next_obs.shape) == 2
+
+    not_done = torch.isfinite(next_obs).all(-1) * (
+        -next_obs[:, 0]
+        - (next_obs[:, 2] * next_obs[:, 0])
+        + (next_obs[:, 3] * next_obs[:, 1])
+        <= 1.0
+    )
+    done = ~not_done
+
+    done = done[:, None]
+
+    return done
+
+
 def inverted_pendulum(act: torch.Tensor, next_obs: torch.Tensor) -> torch.Tensor:
     assert len(next_obs.shape) == 2
 
