@@ -5,12 +5,11 @@
 import pathlib
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
-import numpy as np
-import torch
-
 import mbrl.models.util as model_util
 import mbrl.types
 import mbrl.util.math
+import numpy as np
+import torch
 
 from .model import Ensemble, Model
 
@@ -300,7 +299,10 @@ class OneDTransitionRewardModel(Model):
         variances = logvars.exp()
         stds = torch.sqrt(variances)
         if self.target_is_delta:
-            means += obs
+            if not self.learned_rewards:
+                means += obs
+            else:
+                means[..., :-1] += obs
         return torch.distributions.Normal(means, stds)
 
     def reset(
