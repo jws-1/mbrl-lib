@@ -8,6 +8,7 @@ import omegaconf
 import torch
 
 import mbrl.algorithms.mbpo as mbpo
+import mbrl.algorithms.ombpo as ombpo
 import mbrl.algorithms.pets as pets
 import mbrl.algorithms.planet as planet
 import mbrl.util.env
@@ -23,6 +24,9 @@ def run(cfg: omegaconf.DictConfig):
     if cfg.algorithm.name == "mbpo":
         test_env, *_ = mbrl.util.env.EnvHandler.make_env(cfg)
         return mbpo.train(env, test_env, term_fn, cfg)
+    if cfg.algorithm.name == "ombpo":
+        test_env, *_ = mbrl.util.env.EnvHandler.make_env(cfg)
+        return ombpo.train(env, test_env, term_fn, cfg)
     if cfg.algorithm.name == "planet":
         return planet.train(env, cfg)
 

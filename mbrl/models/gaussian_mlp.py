@@ -193,6 +193,9 @@ class GaussianMLP(Ensemble):
                 logvar = logvar[0] if logvar is not None else None
             return mean, logvar
         assert x.ndim == 2
+        model_len = (
+            len(self.elite_models) if self.elite_models is not None else len(self)
+        )
         if x.shape[0] == 1:
             if self.propagation_method == "random_model":
                 # choose a SINGLE model at random
@@ -205,9 +208,6 @@ class GaussianMLP(Ensemble):
                 return mean.mean(dim=0), (
                     logvar.mean(dim=0) if logvar is not None else None
                 )
-        model_len = (
-            len(self.elite_models) if self.elite_models is not None else len(self)
-        )
         if x.shape[0] % model_len != 0:
             raise ValueError(
                 f"GaussianMLP ensemble requires batch size to be a multiple of the "

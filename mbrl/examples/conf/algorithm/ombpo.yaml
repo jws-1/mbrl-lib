@@ -1,5 +1,5 @@
 # @package _group_
-name: "mbpo"
+name: "ombpo"
 
 normalize: true
 normalize_double_precision: true
@@ -13,6 +13,12 @@ initial_exploration_steps: 5000
 random_initial_explore: false
 num_eval_episodes: 1
 
+percentile: 0.68
+epsilon: 0.5
+action_optim_lr: 0.01
+action_optim_steps: 200
+exp_value_num_samples: 1000
+
 # --------------------------------------------
 #          SAC Agent configuration
 # --------------------------------------------
@@ -20,7 +26,7 @@ agent:
   _target_: mbrl.third_party.pytorch_sac_pranz24.sac.SAC
   num_inputs: ???
   action_space:
-    _target_: gym.spaces.Box
+    _target_: gym.env.Box
     low: ???
     high: ???
     shape: ???
