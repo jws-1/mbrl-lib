@@ -123,7 +123,11 @@ def maybe_add_to_correction_buffer(
     high = (
          cfg.algorithm.percentile + low
     )
-    next_state_dist = dynamics_model.dist(obs, action)
+    p = dynamics_model.model.propagation_method
+    dynamics_model.set_propagation_method("expectation")
+    with torch.no_grad():
+        next_state_dist = dynamics_model.dist(obs, action)
+    dynamics_model.set_propagation_method(p)
     incorrect = (low < next_obs).any() or (next_obs > high).any()
     if incorrect and cfg.debug_mode:
         print(
@@ -219,7 +223,8 @@ def train(
         correction_model,
         optim_lr=cfg.overrides.model_lr,
         weight_decay=cfg.overrides.model_wd,
-        logger=None if silent else logger
+        logger=None if silent else logger,
+        log_group_name="correction_model"
     )
 
     # ------------------- Initialization of agent -------------------
@@ -233,7 +238,7 @@ def train(
         env,
         cfg.algorithm.initial_exploration_steps,
         mbrl.planning.RandomAgent(env) if random_explore else agent,
-        {} if random_explore else {"sample": True, "batched": False},
+        {} if random_explore else {"sample": True, "batched": False, "explore": False},
         replay_buffer=replay_buffer,
     )
 
@@ -268,8 +273,8 @@ def train(
                 truncated,
                 _,
             ) = mbrl.util.common.step_env_and_add_to_buffer(
-                env, obs, agent, {"epsilon": cfg.algorithm.epsilon}, replay_buffer, callback= lambda obs, action, next_obs, reward, terminated, truncated : maybe_add_to_correction_buffer(
-                    obs, action, next_obs, reward, terminated, truncated, cfg, correction_buffer, dynamics_model
+                env, obs, agent, {"epsilon": cfg.algorithm.epsilon}, replay_buffer, callback = lambda args: maybe_add_to_correction_buffer(
+                    *args, cfg, correction_buffer, dynamics_model
                 )
             )
 
