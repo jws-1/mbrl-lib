@@ -44,7 +44,7 @@ class OptimisticSACAgent(Agent):
     def _get_optimistic_action(self, obs: np.ndarray, greedy_action: np.ndarray) -> np.ndarray:
         eps = 1e-6
         obs_tensor = torch.from_numpy(obs)
-        init_action = torch.clamp(torch.from_numpy(greedy_action), -1 + eps, 1 + eps)
+        init_action = torch.clamp(torch.from_numpy(greedy_action), -1 + eps, 1 - eps)
         z = (
             torch.atanh(init_action.clone().detach())
             .requires_grad_(True)
@@ -60,7 +60,10 @@ class OptimisticSACAgent(Agent):
             p = self.correction_model.model.propagation_method
             self.correction_model.set_propagation_method("expectation")
             with torch.no_grad():
-                dist = self.correction_model.dist(obs_tensor, a)
+                try:
+                    dist = self.correction_model.dist(obs_tensor, a)
+                except ValueError:
+                    print(obs_tensor, a)
             self.correction_model.model.set_propagation_method(p)
             value = self._expected_value(dist)
             loss = -value
@@ -90,10 +93,10 @@ class OptimisticSACAgent(Agent):
             (np.ndarray): the action.
         """
         if explore:
-            with torch.no_grad():
-                greedy_action = self.sac_agent.select_action(
-                    obs, batched=False, evaluate=True
-                )
+                with torch.no_grad():
+                    greedy_action = self.sac_agent.select_action(
+                        obs, batched=False, evaluate=True
+                    )
 
             if np.random.rand() < epsilon:
                 return self._get_optimistic_action(obs, greedy_action)

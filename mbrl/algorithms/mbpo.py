@@ -10,6 +10,7 @@ import hydra.utils
 import numpy as np
 import omegaconf
 import torch
+import wandb
 
 import mbrl.constants
 import mbrl.models
@@ -207,12 +208,16 @@ def train(
         obs = None
         terminated = False
         truncated = False
+        train_reward = 0.0
         for steps_epoch in range(cfg.overrides.epoch_length):
             if steps_epoch == 0 or terminated or truncated:
                 steps_epoch = 0
                 obs, _ = env.reset()
                 terminated = False
                 truncated = False
+                if cfg.use_wandb:
+                    wandb.log({"train_reward": train_reward},step=env_steps)
+                train_reward = 0.0
             # --- Doing env step and adding to model dataset ---
             (
                 next_obs,
@@ -221,8 +226,9 @@ def train(
                 truncated,
                 _,
             ) = mbrl.util.common.step_env_and_add_to_buffer(
-                env, obs, agent, {}, replay_buffer
+                env, obs, agent, {"sample": True}, replay_buffer
             )
+            train_reward += reward
 
             # --------------- Model Training -----------------
             if (env_steps + 1) % cfg.overrides.freq_train_model == 0:
@@ -288,6 +294,16 @@ def train(
                         "rollout_length": rollout_length,
                     },
                 )
+                if cfg.use_wandb:
+                    wandb.log(
+                        {
+                            "epoch": epoch,
+                            "env_step": env_steps,
+                            "episode_reward": avg_reward,
+                            "rollout_length": rollout_length,
+                        },
+                        step=env_steps,
+                    )
                 if avg_reward > best_eval_reward:
                     video_recorder.save(f"{epoch}.mp4")
                     best_eval_reward = avg_reward

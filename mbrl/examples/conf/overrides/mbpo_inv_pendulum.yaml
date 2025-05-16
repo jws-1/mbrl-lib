@@ -2,7 +2,7 @@
 env: "gym___InvertedPendulum-v4"
 term_fn: "inverted_pendulum"
 
-num_steps: 20000
+num_steps: 10000
 epoch_length: 250
 num_elites: 5
 patience: 5

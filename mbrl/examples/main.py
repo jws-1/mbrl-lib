@@ -6,6 +6,7 @@ import hydra
 import numpy as np
 import omegaconf
 import torch
+import wandb
 
 import mbrl.algorithms.mbpo as mbpo
 import mbrl.algorithms.ombpo as ombpo
@@ -16,6 +17,11 @@ import mbrl.util.env
 
 @hydra.main(config_path="conf", config_name="main")
 def run(cfg: omegaconf.DictConfig):
+    if cfg.use_wandb:
+        wandb.init(
+            project="ewrl_mbpo",
+            config=omegaconf.OmegaConf.to_container(cfg),
+        )
     env, term_fn, reward_fn = mbrl.util.env.EnvHandler.make_env(cfg)
     np.random.seed(cfg.seed)
     torch.manual_seed(cfg.seed)

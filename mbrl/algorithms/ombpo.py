@@ -22,6 +22,7 @@ import mbrl.util.math
 import mbrl.models.util as model_util
 from mbrl.planning.optimistic_sac_wrapper import OptimisticSACAgent
 from mbrl.third_party.pytorch_sac import VideoRecorder
+import wandb
 
 MBPO_LOG_FORMAT = mbrl.constants.EVAL_LOG_FORMAT + [
     ("epoch", "E", "int"),
@@ -116,6 +117,8 @@ def maybe_replace_sac_buffer(
 def maybe_add_to_correction_buffer(
     obs, action, next_obs, reward, terminated, truncated, cfg, correction_buffer, dynamics_model
 ):
+    if not dynamics_model.trained:
+        return
     obs = model_util.to_tensor(obs)
     action = model_util.to_tensor(action)
     next_obs = model_util.to_tensor(next_obs)
@@ -178,7 +181,9 @@ def train(
 
     # -------------- Create initial overrides. dataset --------------
     dynamics_model = mbrl.util.common.create_one_dim_tr_model(cfg, obs_shape, act_shape)
+    dynamics_model.trained = False
     correction_model = mbrl.util.common.create_one_dim_tr_model(cfg, obs_shape, act_shape)
+    correction_model.trained = False
     use_double_dtype = cfg.algorithm.get("normalize_double_precision", False)
     dtype = np.double if use_double_dtype else np.float32
     replay_buffer = mbrl.util.common.create_replay_buffer(
@@ -259,12 +264,18 @@ def train(
         obs = None
         terminated = False
         truncated = False
+        train_reward = 0.0
         for steps_epoch in range(cfg.overrides.epoch_length):
             if steps_epoch == 0 or terminated or truncated:
                 steps_epoch = 0
                 obs, _ = env.reset()
                 terminated = False
                 truncated = False
+                wandb.log(
+                    {"train_reward": train_reward},
+                    step=env_steps,
+                )
+                train_reward = 0.0
             # --- Doing env step and adding to model dataset ---
             (
                 next_obs,
@@ -273,10 +284,11 @@ def train(
                 truncated,
                 _,
             ) = mbrl.util.common.step_env_and_add_to_buffer(
-                env, obs, agent, {"epsilon": cfg.algorithm.epsilon}, replay_buffer, callback = lambda args: maybe_add_to_correction_buffer(
+                env, obs, agent, {"epsilon": cfg.algorithm.epsilon, "explore": correction_model.trained, "sample": True}, replay_buffer, callback = lambda args: maybe_add_to_correction_buffer(
                     *args, cfg, correction_buffer, dynamics_model
                 )
             )
+            train_reward += reward
 
             # --------------- Model Training -----------------
             if (env_steps + 1) % cfg.overrides.freq_train_model == 0:
@@ -287,13 +299,16 @@ def train(
                     replay_buffer,
                     work_dir=work_dir,
                 )
-                mbrl.util.common.train_model_and_save_model_and_data(
-                    correction_model,
-                    correction_model_trainer,
-                    cfg.overrides,
-                    correction_buffer,
-                    work_dir=work_dir
-                )
+                dynamics_model.trained = True
+                if len(correction_buffer):
+                    mbrl.util.common.train_model_and_save_model_and_data(
+                        correction_model,
+                        correction_model_trainer,
+                        cfg.overrides,
+                        correction_buffer,
+                        work_dir=work_dir
+                    )
+                correction_model.trained = True
 
                 # --------- Rollout new model and store imagined trajectories --------
                 # Batch all rollouts for the next freq_train_model steps together
@@ -349,6 +364,16 @@ def train(
                         "rollout_length": rollout_length,
                     },
                 )
+                if cfg.use_wandb:
+                    wandb.log(
+                        {
+                            "epoch": epoch,
+                            "env_step": env_steps,
+                            "episode_reward": avg_reward,
+                            "rollout_length": rollout_length,
+                        },
+                        step=env_steps,
+                    )
                 if avg_reward > best_eval_reward:
                     video_recorder.save(f"{epoch}.mp4")
                     best_eval_reward = avg_reward
