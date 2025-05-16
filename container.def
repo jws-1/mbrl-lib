@@ -1,0 +1,62 @@
+Bootstrap: docker
+From: ubuntu:22.04
+
+%labels
+    Maintainer Jared Swift
+    Version 1.0
+
+%files
+    # Add your requirements.txt file
+    mbrl-lib /opt/mbrl-lib
+    requirements.txt /opt/requirements.txt    
+
+%post
+    # Set noninteractive frontend to avoid interactive prompts
+    export DEBIAN_FRONTEND=noninteractive
+    # Update and install dependencies
+    apt-get update && apt-get install -y \
+        build-essential \
+        wget \
+        libssl-dev \
+        zlib1g-dev \
+        libbz2-dev \
+        libreadline-dev \
+        libsqlite3-dev \
+        curl \
+        llvm \
+        libncurses5-dev \
+        libncursesw5-dev \
+        xz-utils \
+        tk-dev \
+        libffi-dev \
+        liblzma-dev \
+        git
+    apt-get install -y libglu1-mesa-dev libgl1-mesa-dev libosmesa6-dev xvfb ffmpeg curl patchelf libglfw3 libglfw3-dev cmake zlib1g zlib1g-dev swig
+    
+    # Set the timezone to UTC (or change to your preferred timezone)
+    ln -fs /usr/share/zoneinfo/UTC /etc/localtime
+    dpkg-reconfigure --frontend noninteractive tzdata
+
+    # Install Python 3.8
+    apt-get install python3-pip -y
+
+    # Upgrade pip
+    python3.8 -m pip install --upgrade pip==23.0.1
+
+    # Install requirements
+
+    cd /opt/mbrl-lib
+    python3.8 -m pip install -e .  
+    python3.8 -m pip install -r /opt/requirements.txt
+    
+    echo "export PS1=\"\[\033[01;32m\]Apptainer\[\033[00m\]:\[\033[01;33m\]\w\[\033[00m\]> \"" >> /.singularity.d/env/99-base.sh
+
+
+%environment
+    # Set environment variables
+    export PATH="/opt/myenv/bin:$PATH"
+    export PYTHON_VERSION=3.8.20
+
+%runscript
+    # Define the default command to run
+    exec /bin/bash "$@"
