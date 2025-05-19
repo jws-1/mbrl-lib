@@ -70,7 +70,7 @@ for seed in "${seed_list[@]}"; do
   python -m mbrl.examples.main \
     algorithm=ombpo \
     overrides="$overrides" \
-    debug_mode=true \
+    debug_mode=false \
     use_wandb=true \
     seed="$seed" \
     algorithm.percentile="$percentile" \
