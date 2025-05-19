@@ -215,9 +215,6 @@ def train(
                 obs, _ = env.reset()
                 terminated = False
                 truncated = False
-                if cfg.use_wandb:
-                    wandb.log({"train_reward": train_reward},step=env_steps)
-                train_reward = 0.0
             # --- Doing env step and adding to model dataset ---
             (
                 next_obs,

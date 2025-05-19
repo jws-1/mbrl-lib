@@ -19,7 +19,7 @@ import mbrl.util.env
 def run(cfg: omegaconf.DictConfig):
     if cfg.use_wandb:
         wandb.init(
-            project="ewrl_mbpo",
+            project="ewrl_mbpo_19MAY",
             config=omegaconf.OmegaConf.to_container(cfg),
         )
     env, term_fn, reward_fn = mbrl.util.env.EnvHandler.make_env(cfg)

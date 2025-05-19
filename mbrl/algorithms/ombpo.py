@@ -234,7 +234,7 @@ def train(
 
     # ------------------- Initialization of agent -------------------
     agent = OptimisticSACAgent(
-        cast(pytorch_sac_pranz24.SAC, hydra.utils.instantiate(cfg.algorithm.agent)), correction_model, dynamics_model, cfg.algorithm.action_optim_lr, cfg.algorithm.action_optim_steps, cfg.algorithm.exp_value_num_samples
+        cast(pytorch_sac_pranz24.SAC, hydra.utils.instantiate(cfg.algorithm.agent)), correction_model, dynamics_model, env.action_space.low, env.action_space.high, cfg.algorithm.action_optim_lr, cfg.algorithm.action_optim_steps, cfg.algorithm.exp_value_num_samples
     )
 
     # -------------- Seed models --------------
@@ -271,11 +271,6 @@ def train(
                 obs, _ = env.reset()
                 terminated = False
                 truncated = False
-                wandb.log(
-                    {"train_reward": train_reward},
-                    step=env_steps,
-                )
-                train_reward = 0.0
             # --- Doing env step and adding to model dataset ---
             (
                 next_obs,
