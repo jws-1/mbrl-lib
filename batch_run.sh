@@ -14,6 +14,7 @@ n_processes=4
 use_slurm=false
 time="0-4:00"
 algorithm="ombpo"
+device="cuda:0"
 
 print_help() {
   echo "Usage: $0 [OPTIONS]"
@@ -28,6 +29,7 @@ print_help() {
   echo "  --action_optim_steps VAL  Default: 200 (only used for ombpo)"
   echo "  --overrides NAME          Default: mbpo_inv_pendulum"
   echo "  --algorithm NAME          Algorithm to use (default: ombpo)"
+  echo "  --device VAL              'cuda:0' (default) or 'cpu'"
   echo "  --parallel                Run experiments in parallel"
   echo "  --n_processes N           Max parallel jobs (default: 4)"
   echo "  --use_slurm               Submit jobs using SLURM"
@@ -47,6 +49,7 @@ while [[ $# -gt 0 ]]; do
     --action_optim_steps) action_optim_steps="$2"; shift 2 ;;
     --overrides) overrides="$2"; shift 2 ;;
     --algorithm) algorithm="$2"; shift 2 ;;
+    --device) device="$2"; shift 2 ;;
     --parallel) parallel=true; shift ;;
     --n_processes) n_processes="$2"; shift 2 ;;
     --use_slurm) use_slurm=true; shift ;;
@@ -75,7 +78,8 @@ run_experiment() {
     overrides=$overrides \
     debug_mode=false \
     use_wandb=true \
-    seed=$seed"
+    seed=$seed \
+    device=$device"
 
   if [[ "$algorithm" == "ombpo" ]]; then
     cmd+=" \
@@ -95,7 +99,7 @@ submit_slurm_job() {
   local job_script
   job_script=$(mktemp)
 
-  extra_args=""
+  extra_args="device=$device"
   if [[ "$algorithm" == "ombpo" ]]; then
     extra_args+=" \
       algorithm.percentile=$percentile \
@@ -104,13 +108,21 @@ submit_slurm_job() {
       algorithm.action_optim_steps=$action_optim_steps"
   fi
 
+  if [[ "$device" == "cpu" ]]; then
+    partition="cpu,nmes_cpu"
+    gres_line=""
+  else
+    partition="gpu,nmes_gpu"
+    gres_line="#SBATCH --gres=gpu:1"
+  fi
+
   cat > "$job_script" <<EOF
 #!/bin/bash -l
 #SBATCH --job-name=${algorithm}_${overrides}_${seed}
 #SBATCH --output=/scratch/users/%u/${algorithm}_${overrides}_${seed}.out
 #SBATCH --error=/scratch/users/%u/${algorithm}_${overrides}_${seed}_err.out
-#SBATCH --partition=gpu,nmes_gpu
-#SBATCH --gres=gpu:1
+#SBATCH --partition=$partition
+$gres_line
 #SBATCH --time=$time
 #SBATCH --ntasks=8
 #SBATCH --nodes=1
@@ -125,7 +137,8 @@ python3 -m mbrl.examples.main \
   overrides=$overrides \
   debug_mode=false \
   use_wandb=true \
-  seed=$seed$extra_args"
+  seed=$seed \
+  $extra_args"
 EOF
 
   if ! job_output=$(sbatch "$job_script"); then
