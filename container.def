@@ -7,7 +7,7 @@ From: ubuntu:22.04
 
 %files
     # Add your requirements.txt file
-    requirements.txt /opt/requirements.txt    
+    requirements/main.txt /opt/requirements.txt    
 
 %post
     # Set noninteractive frontend to avoid interactive prompts
