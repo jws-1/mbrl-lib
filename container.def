@@ -7,7 +7,6 @@ From: ubuntu:22.04
 
 %files
     # Add your requirements.txt file
-    mbrl-lib /opt/mbrl-lib
     requirements.txt /opt/requirements.txt    
 
 %post
