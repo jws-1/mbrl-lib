@@ -79,7 +79,7 @@ def evaluate(
         truncated = False
         episode_reward = 0.0
         while not terminated and not truncated:
-            action = agent.act(obs,explore=False)
+            action = agent.act(obs, explore=False)
             obs, reward, terminated, truncated, _ = env.step(action)
             video_recorder.record(env)
             episode_reward += reward
@@ -130,12 +130,20 @@ def maybe_add_to_correction_buffer(
     dynamics_model.set_propagation_method("expectation")
     with torch.no_grad():
         next_state_dist = dynamics_model.dist(obs, action)
-    dynamics_model.set_propagation_method(p)
-    incorrect = (low < next_obs).any() or (next_obs > high).any()
-    if incorrect and cfg.debug_mode:
-        print(
-            f"Transition <{obs.cpu().numpy()}, {action.cpu().numpy()}, {next_obs.cpu().numpy()}> was incorrect, low percentile: {low}, high percentile: {high} (dist: Normal({next_state_dist.mean.cpu().numpy()}, {next_state_dist.stddev.cpu().numpy()}))"
+    if dynamics_model.learned_rewards:
+        next_state_dist = torch.distributions.Normal(
+            next_state_dist.loc[..., :-1].squeeze().cpu(),
+            next_state_dist.scale[..., :-1].squeeze().cpu()
         )
+    dynamics_model.set_propagation_method(p)
+    low_percentile = next_state_dist.icdf(
+        torch.full_like(next_obs, low).cpu()
+    )
+    high_percentile = next_state_dist.icdf(
+        torch.full_like(next_obs, high).cpu()
+    )
+    incorrect = (low_percentile > next_obs).any() or (next_obs > high_percentile).any()
+    if incorrect:
         correction_buffer.add(
             obs.cpu().numpy(),
             action.cpu().numpy(),
@@ -144,11 +152,16 @@ def maybe_add_to_correction_buffer(
             terminated,
             truncated,
         )
+        if cfg.debug_mode:
+            print(
+                f"Transition <{obs.cpu().numpy()}, {action.cpu().numpy()}, {next_obs.cpu().numpy()}> was incorrect, low percentile: {low}, high percentile: {high} (dist: Normal({next_state_dist.mean.cpu().numpy()}, {next_state_dist.stddev.cpu().numpy()}))"
+            )
 
 def train(
     env: gym.Env,
     test_env: gym.Env,
     termination_fn: mbrl.types.TermFnType,
+    reward_fn: mbrl.types.RewardFnType,
     cfg: omegaconf.DictConfig,
     silent: bool = False,
     work_dir: Optional[str] = None,
@@ -216,7 +229,7 @@ def train(
     updates_made = 0
     env_steps = 0
     model_env = mbrl.models.ModelEnv(
-        env, dynamics_model, termination_fn, None, generator=torch_generator
+        env, dynamics_model, termination_fn, reward_fn, generator=torch_generator
     )
     model_trainer = mbrl.models.ModelTrainer(
         dynamics_model,
@@ -234,18 +247,19 @@ def train(
 
     # ------------------- Initialization of agent -------------------
     agent = OptimisticSACAgent(
-        cast(pytorch_sac_pranz24.SAC, hydra.utils.instantiate(cfg.algorithm.agent)), correction_model, dynamics_model, env.action_space.low, env.action_space.high, cfg.algorithm.action_optim_lr, cfg.algorithm.action_optim_steps, cfg.algorithm.exp_value_num_samples
+        cast(pytorch_sac_pranz24.SAC, hydra.utils.instantiate(cfg.algorithm.agent)), correction_model, env.action_space.low, env.action_space.high, cfg.algorithm.action_optim_lr, cfg.algorithm.action_optim_steps, cfg.algorithm.exp_value_num_samples, reward_fn, cfg.overrides.sac_gamma
     )
 
     # -------------- Seed models --------------
     random_explore = cfg.algorithm.random_initial_explore
-    mbrl.util.common.rollout_agent_trajectories(
-        env,
-        cfg.algorithm.initial_exploration_steps,
-        mbrl.planning.RandomAgent(env) if random_explore else agent,
-        {} if random_explore else {"sample": True, "batched": False, "explore": False},
-        replay_buffer=replay_buffer,
-    )
+    if cfg.algorithm.initial_exploration_steps:
+        mbrl.util.common.rollout_agent_trajectories(
+            env,
+            cfg.algorithm.initial_exploration_steps,
+            mbrl.planning.RandomAgent(env) if random_explore else agent,
+            {} if random_explore else {"sample": True, "batched": False, "explore": False},
+            replay_buffer=replay_buffer,
+        )
 
     best_eval_reward = -np.inf
     epoch = 0
@@ -357,6 +371,8 @@ def train(
                         "env_step": env_steps,
                         "episode_reward": avg_reward,
                         "rollout_length": rollout_length,
+                        "dataset_size": len(replay_buffer),
+                        "correction_dataset_size": len(correction_buffer),
                     },
                 )
                 if cfg.use_wandb:
@@ -366,6 +382,8 @@ def train(
                             "env_step": env_steps,
                             "episode_reward": avg_reward,
                             "rollout_length": rollout_length,
+                            "dataset_size": len(replay_buffer),
+                            "correction_dataset_size": len(correction_buffer),
                         },
                         step=env_steps,
                     )

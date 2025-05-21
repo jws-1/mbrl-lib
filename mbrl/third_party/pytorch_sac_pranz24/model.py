@@ -107,6 +107,11 @@ class GaussianPolicy(nn.Module):
         mean = torch.tanh(mean) * self.action_scale + self.action_bias
         return action, log_prob, mean
 
+    def get_distribution(self, state):
+        mean, log_std = self.forward(state)
+        std = log_std.exp()
+        return Normal(mean, std)
+
     def to(self, device):
         self.action_scale = self.action_scale.to(device)
         self.action_bias = self.action_bias.to(device)

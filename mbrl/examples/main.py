@@ -19,7 +19,7 @@ import mbrl.util.env
 def run(cfg: omegaconf.DictConfig):
     if cfg.use_wandb:
         wandb.init(
-            project="ewrl_mbpo_19MAY",
+            project="ewrl_mbpo_21MAY",
             config=omegaconf.OmegaConf.to_container(cfg),
         )
     env, term_fn, reward_fn = mbrl.util.env.EnvHandler.make_env(cfg)
@@ -29,10 +29,10 @@ def run(cfg: omegaconf.DictConfig):
         return pets.train(env, term_fn, reward_fn, cfg)
     if cfg.algorithm.name == "mbpo":
         test_env, *_ = mbrl.util.env.EnvHandler.make_env(cfg)
-        return mbpo.train(env, test_env, term_fn, cfg)
+        return mbpo.train(env, test_env, term_fn, reward_fn, cfg)
     if cfg.algorithm.name == "ombpo":
         test_env, *_ = mbrl.util.env.EnvHandler.make_env(cfg)
-        return ombpo.train(env, test_env, term_fn, cfg)
+        return ombpo.train(env, test_env, term_fn,reward_fn, cfg)
     if cfg.algorithm.name == "planet":
         return planet.train(env, cfg)
 

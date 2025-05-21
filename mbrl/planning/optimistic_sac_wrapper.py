@@ -23,15 +23,16 @@ class OptimisticSACAgent(Agent):
         (pytorch_sac.SACAgent): the agent to wrap.
     """
 
-    def __init__(self, sac_agent: pytorch_sac.SAC, correction_model: mbrl.models.OneDTransitionRewardModel, dynamics_model: mbrl.models.OneDTransitionRewardModel, action_low : np.ndarray, action_high: np.ndarray, lr : float, steps: int, exp_value_num_samples: int):
+    def __init__(self, sac_agent: pytorch_sac.SAC, correction_model: mbrl.models.OneDTransitionRewardModel, action_low : np.ndarray, action_high: np.ndarray, lr : float, steps: int, exp_value_num_samples: int, reward_fn, gamma: float):
         self.sac_agent = sac_agent
-        self.dynamics_model = dynamics_model
         self.correction_model = correction_model
         self.lr = lr
         self.steps = steps
         self.exp_value_num_samples = exp_value_num_samples
         self.action_low = torch.from_numpy(action_low)
         self.action_high = torch.from_numpy(action_high)
+        self.reward_fn = reward_fn
+        self.gamma = gamma
 
     def _expected_value(self, dist: torch.distributions.Normal) -> torch.Tensor:
         samples = dist.rsample((self.exp_value_num_samples,))
@@ -42,45 +43,63 @@ class OptimisticSACAgent(Agent):
         q1, q2 = self.sac_agent.critic(samples, actions)
         return torch.min(q1.mean(), q2.mean())
 
-    def _get_optimistic_action(self, obs: np.ndarray, greedy_action: np.ndarray) -> np.ndarray:
+    def _objective(self, obs, action):
+        dist = self._dist(obs, action)
+        samples = dist.rsample((self.exp_value_num_samples,))
+        if self.correction_model.learned_rewards:
+            samples = samples[..., :-1]
+        samples = samples.squeeze(dim=1)
+        actions = self.sac_agent.policy.sample(samples)[0]
+        q1, q2 = self.sac_agent.critic(samples, actions)
+        v = torch.min(q1, q2)
+        r = self.reward_fn(actions, samples)
+        return (r + self.gamma * v).mean()
+
+    def _dist(self, obs, action):
+        p = self.correction_model.model.propagation_method
+        self.correction_model.set_propagation_method("expectation")
+        dist = self.correction_model.dist(obs, action)
+        self.correction_model.model.set_propagation_method(p)
+        return dist
+
+    def _get_optimistic_action(self, obs: np.ndarray, greedy_action: np.ndarray, action_dist: torch.distributions.Normal) -> np.ndarray:
         eps = 1e-6
         obs_tensor = torch.from_numpy(obs).float()
         greedy_action_tensor = torch.from_numpy(greedy_action).float()
-        with torch.no_grad():
-            greedy_val = min(self.sac_agent.critic(obs_tensor.unsqueeze(0).to(self.sac_agent.device), greedy_action_tensor.unsqueeze(0).to(self.sac_agent.device)))
-        normalized_action = 2.0 * (greedy_action_tensor - self.action_low) / (self.action_high - self.action_low) - 1.0
+        # action_low = action_dist.mean - action_dist.stddev
+        # action_high = action_dist.mean + action_dist.stddev
+        # action_low = torch.max(action_low.cpu(), self.action_low)
+        # action_high = torch.min(action_high.cpu(), self.action_high)
+        action_low = self.action_low
+        action_high = self.action_high
+        greedy_objective = min(self.sac_agent.critic(obs_tensor.unsqueeze(0).to(self.sac_agent.device), greedy_action_tensor.unsqueeze(0).to(self.sac_agent.device)))
+        random_action = action_low + (action_high - action_low) * torch.rand_like(action_low)
+        normalized_action = 2.0 * (random_action - action_low) / (action_high - action_low) - 1.0
         normalized_action = torch.clamp(normalized_action, -1 + eps, 1 - eps)
         z = torch.atanh(normalized_action.clone().detach()).requires_grad_(True)
 
-        optimizer = torch.optim.SGD([z], lr=self.lr)
+        optimizer = torch.optim.Adam([z], lr=self.lr)
 
-        best_val = greedy_val
-        best_action = greedy_action_tensor
+        best_val = -np.inf
+        best_action = None
 
         for step in range(self.steps):
             optimizer.zero_grad()
             a = torch.tanh(z)
             scaled_a = self.action_low + 0.5 * (a + 1.0) * (self.action_high - self.action_low)
-            p = self.correction_model.model.propagation_method
-            self.correction_model.set_propagation_method("expectation")
-            try:
-                dist = self.correction_model.dist(obs_tensor, scaled_a)
-            except ValueError:
-                print(obs_tensor, scaled_a)
-            self.correction_model.model.set_propagation_method(p)
-
-            value = self._expected_value(dist)
-            loss = -value
+            objective = self._objective(obs_tensor, scaled_a)
+            loss = -objective
             loss.backward()
             optimizer.step()
-            assert z.grad is not None, "Gradient not flowing — check autograd tracking."
 
-            if value.item() > best_val:
-                best_val = value.item()
+            if objective.item() > best_val:
+                best_val = objective.item()
                 best_action = scaled_a.detach().clone().requires_grad_(False)
-
-        return best_action.cpu().numpy()
-
+        
+        if best_val > greedy_objective:
+            return best_action.cpu().numpy()
+        return greedy_action
+    
     def act(
         self, obs: np.ndarray, sample: bool = False, batched: bool = False, epsilon: float = 0.5, explore: bool = True, **_kwargs
     ) -> np.ndarray:
@@ -104,7 +123,7 @@ class OptimisticSACAgent(Agent):
                 )
 
             if np.random.rand() < epsilon:
-                return self._get_optimistic_action(obs, greedy_action)
+                return self._get_optimistic_action(obs, greedy_action, self.sac_agent.policy.get_distribution(torch.from_numpy(obs).to(self.sac_agent.device).float()))
             else:
                 return greedy_action
         else:

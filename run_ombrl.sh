@@ -1,11 +1,14 @@
 #!/bin/bash
 
 # Default values
-n_seeds="5"
+n_seeds="10"
 seeds=""
 epsilon="0.5"
 percentile="0.68"
 overrides="mbpo_inv_pendulum"
+action_optim_lr=0.05
+action_optim_steps=200
+n_seed_steps=500
 
 print_help() {
   echo "Usage: $0 [--n_seeds N | --seeds S1,S2,...] [--epsilon VAL] [--percentile VAL] [--overrides NAME]"
@@ -15,6 +18,9 @@ print_help() {
   echo "  --seeds LIST        Comma-separated list of seeds (e.g., 0,2,5). Overrides n_seeds"
   echo "  --epsilon VAL       Default: 0.5"
   echo "  --percentile VAL    Default: 0.68"
+  echo "  --n_seed_steps VAL    Default: 500"
+  echo "  --action_optim_lr VAL    Default: 0.05"
+  echo "  --action_optim_steps VAL    Default: 200"
   echo "  --overrides NAME    Default: mbpo_inv_pendulum"
   echo "  -h, --help          Show this help message"
 }
@@ -36,6 +42,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     --percentile)
       percentile="$2"
+      shift 2
+      ;;
+    --n_seed_steps)
+      n_seed_steps="$2"
+      shift 2
+      ;;
+    --action_optim_lr)
+      action_optim_lr="$2"
+      shift 2
+      ;;
+    --action_optim_steps)
+      action_optim_steps="$2"
       shift 2
       ;;
     --overrides)
@@ -74,6 +92,8 @@ for seed in "${seed_list[@]}"; do
     use_wandb=true \
     seed="$seed" \
     algorithm.percentile="$percentile" \
-    algorithm.epsilon="$epsilon"
+    algorithm.epsilon="$epsilon" \
+    algorithm.action_optim_lr="$action_optim_lr" \
+    algorithm.action_optim_steps="$action_optim_steps"
   echo "Finished run with seed=$seed"
 done

@@ -118,6 +118,7 @@ def train(
     env: gym.Env,
     test_env: gym.Env,
     termination_fn: mbrl.types.TermFnType,
+    reward_fn: Optional[mbrl.types.RewardFnType],
     cfg: omegaconf.DictConfig,
     silent: bool = False,
     work_dir: Optional[str] = None,
@@ -164,13 +165,14 @@ def train(
         reward_type=dtype,
     )
     random_explore = cfg.algorithm.random_initial_explore
-    mbrl.util.common.rollout_agent_trajectories(
-        env,
-        cfg.algorithm.initial_exploration_steps,
-        mbrl.planning.RandomAgent(env) if random_explore else agent,
-        {} if random_explore else {"sample": True, "batched": False},
-        replay_buffer=replay_buffer,
-    )
+    if cfg.algorithm.initial_exploration_steps:
+        mbrl.util.common.rollout_agent_trajectories(
+            env,
+            cfg.algorithm.initial_exploration_steps,
+            mbrl.planning.RandomAgent(env) if random_explore else agent,
+            {} if random_explore else {"sample": True, "batched": False},
+            replay_buffer=replay_buffer,
+        )
 
     # ---------------------------------------------------------
     # --------------------- Training Loop ---------------------
@@ -183,7 +185,7 @@ def train(
     updates_made = 0
     env_steps = 0
     model_env = mbrl.models.ModelEnv(
-        env, dynamics_model, termination_fn, None, generator=torch_generator
+        env, dynamics_model, termination_fn, reward_fn, generator=torch_generator
     )
     model_trainer = mbrl.models.ModelTrainer(
         dynamics_model,

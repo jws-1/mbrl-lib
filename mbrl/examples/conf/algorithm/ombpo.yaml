@@ -6,16 +6,16 @@ normalize_double_precision: true
 target_is_delta: true
 learned_rewards: true
 freq_train_model: ${overrides.freq_train_model}
-real_data_ratio: 0.0
+real_data_ratio: 0.05
 
 sac_samples_action: true
-initial_exploration_steps: 256
+initial_exploration_steps: 0
 random_initial_explore: false
-num_eval_episodes: 1
+num_eval_episodes: 10
 
 percentile: 0.95
 epsilon: 0.1
-action_optim_lr: 0.1
+action_optim_lr: 0.05
 action_optim_steps: 100
 exp_value_num_samples: 1000
 
