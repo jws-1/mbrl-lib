@@ -247,7 +247,7 @@ def train(
 
     # ------------------- Initialization of agent -------------------
     agent = OptimisticSACAgent(
-        cast(pytorch_sac_pranz24.SAC, hydra.utils.instantiate(cfg.algorithm.agent)), correction_model, env.action_space.low, env.action_space.high, cfg.algorithm.action_optim_lr, cfg.algorithm.action_optim_steps, cfg.algorithm.exp_value_num_samples, reward_fn, cfg.overrides.sac_gamma
+        cast(pytorch_sac_pranz24.SAC, hydra.utils.instantiate(cfg.algorithm.agent)), dynamics_model, correction_model, env.action_space.low, env.action_space.high, cfg.algorithm.action_optim_lr, cfg.algorithm.action_optim_steps, cfg.algorithm.exp_value_num_samples, reward_fn, cfg.overrides.sac_gamma
     )
 
     # -------------- Seed models --------------

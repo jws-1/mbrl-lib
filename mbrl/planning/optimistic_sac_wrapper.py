@@ -23,8 +23,9 @@ class OptimisticSACAgent(Agent):
         (pytorch_sac.SACAgent): the agent to wrap.
     """
 
-    def __init__(self, sac_agent: pytorch_sac.SAC, correction_model: mbrl.models.OneDTransitionRewardModel, action_low : np.ndarray, action_high: np.ndarray, lr : float, steps: int, exp_value_num_samples: int, reward_fn, gamma: float):
+    def __init__(self, sac_agent: pytorch_sac.SAC, dynamics_model: mbrl.models.OneDTransitionRewardModel, correction_model: mbrl.models.OneDTransitionRewardModel, action_low : np.ndarray, action_high: np.ndarray, lr : float, steps: int, exp_value_num_samples: int, reward_fn, gamma: float):
         self.sac_agent = sac_agent
+        self.dynamics_model = dynamics_model
         self.correction_model = correction_model
         self.lr = lr
         self.steps = steps
@@ -44,7 +45,7 @@ class OptimisticSACAgent(Agent):
         return torch.min(q1.mean(), q2.mean())
 
     def _objective(self, obs, action):
-        dist = self._dist(obs, action)
+        dist = self._dist(self.correction_model, obs, action)
         samples = dist.rsample((self.exp_value_num_samples,))
         if self.correction_model.learned_rewards:
             samples = samples[..., :-1]
@@ -52,14 +53,19 @@ class OptimisticSACAgent(Agent):
         actions = self.sac_agent.policy.sample(samples)[0]
         q1, q2 = self.sac_agent.critic(samples, actions)
         v = torch.min(q1, q2)
-        r = self.reward_fn(actions, samples)
+        if self.reward_fn is not None:
+            r = self.reward_fn(actions, samples)
+        else:
+            rew_dist = self._dist(self.dynamics_model, obs, action)
+            r = rew_dist.rsample((self.exp_value_num_samples,))
+            r = r[..., :-1]
         return (r + self.gamma * v).mean()
 
-    def _dist(self, obs, action):
-        p = self.correction_model.model.propagation_method
-        self.correction_model.set_propagation_method("expectation")
-        dist = self.correction_model.dist(obs, action)
-        self.correction_model.model.set_propagation_method(p)
+    def _dist(self, model, obs, action):
+        p = model.model.propagation_method
+        model.model.set_propagation_method("expectation")
+        dist = model.dist(obs, action)
+        model.model.set_propagation_method(p)
         return dist
 
     def _get_optimistic_action(self, obs: np.ndarray, greedy_action: np.ndarray, action_dist: torch.distributions.Normal) -> np.ndarray:
