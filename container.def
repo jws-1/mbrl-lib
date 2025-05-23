@@ -9,7 +9,14 @@ From: ubuntu:22.04
     # Add your requirements.txt file
     requirements/main.txt /opt/requirements.txt    
 
+%environment
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/mujoco210/bin
+    export MUJOCO_PY_MUJOCO_PATH=/opt/mujoco210
+
 %post
+    export MUJOCO_PY_MUJOCO_PATH=/opt/mujoco210
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/mujoco210/bin
+
     # Set noninteractive frontend to avoid interactive prompts
     export DEBIAN_FRONTEND=noninteractive
     # Update and install dependencies
@@ -32,6 +39,9 @@ From: ubuntu:22.04
         git
     apt-get install -y libglu1-mesa-dev libgl1-mesa-dev libosmesa6-dev xvfb ffmpeg curl patchelf libglfw3 libglfw3-dev cmake zlib1g zlib1g-dev swig
     
+    wget https://mujoco.org/download/mujoco210-linux-x86_64.tar.gz
+    tar -xvzf mujoco210-linux-x86_64.tar.gz -C /opt
+
     # Set the timezone to UTC (or change to your preferred timezone)
     ln -fs /usr/share/zoneinfo/UTC /etc/localtime
     dpkg-reconfigure --frontend noninteractive tzdata
@@ -40,14 +50,12 @@ From: ubuntu:22.04
     apt-get install python3-pip -y
 
     # Upgrade pip
-    python3.8 -m pip install --upgrade pip==23.0.1
+    python3 -m pip install --upgrade pip==23.0.1
 
     # Install requirements
 
-    cd /opt/mbrl-lib
-    python3.8 -m pip install -e .  
-    python3.8 -m pip install -r /opt/requirements.txt
-    
+    python3 -m pip install -r /opt/requirements.txt
+    python3 -c 'import mujoco_py'
     echo "export PS1=\"\[\033[01;32m\]Apptainer\[\033[00m\]:\[\033[01;33m\]\w\[\033[00m\]> \"" >> /.singularity.d/env/99-base.sh
 
 
