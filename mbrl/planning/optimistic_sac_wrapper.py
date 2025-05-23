@@ -58,7 +58,7 @@ class OptimisticSACAgent(Agent):
         else:
             rew_dist = self._dist(self.dynamics_model, obs, action)
             r = rew_dist.rsample((self.exp_value_num_samples,))
-            r = r[..., :-1]
+            r = r[..., -1]
         return (r + self.gamma * v).mean()
 
     def _dist(self, model, obs, action):
