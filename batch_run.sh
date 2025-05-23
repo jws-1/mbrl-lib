@@ -15,6 +15,7 @@ use_slurm=false
 time="0-4:00"
 algorithm="ombpo"
 device="cuda:0"
+learned_rewards=false
 
 print_help() {
   echo "Usage: $0 [OPTIONS]"
@@ -30,6 +31,7 @@ print_help() {
   echo "  --overrides NAME          Default: mbpo_inv_pendulum"
   echo "  --algorithm NAME          Algorithm to use (default: ombpo)"
   echo "  --device VAL              'cuda:0' (default) or 'cpu'"
+  echo "  --learned_rewards BOOL    Use learned rewards (default: false)"
   echo "  --parallel                Run experiments in parallel"
   echo "  --n_processes N           Max parallel jobs (default: 4)"
   echo "  --use_slurm               Submit jobs using SLURM"
@@ -50,6 +52,7 @@ while [[ $# -gt 0 ]]; do
     --overrides) overrides="$2"; shift 2 ;;
     --algorithm) algorithm="$2"; shift 2 ;;
     --device) device="$2"; shift 2 ;;
+    --learned_rewards) learned_rewards="$2"; shift 2 ;;
     --parallel) parallel=true; shift ;;
     --n_processes) n_processes="$2"; shift 2 ;;
     --use_slurm) use_slurm=true; shift ;;
@@ -73,13 +76,14 @@ fi
 run_experiment() {
   local seed="$1"
   echo "Running with seed=$seed"
-  cmd="python -m mbrl.examples.main \
+  cmd="python3 -m mbrl.examples.main \
     algorithm=$algorithm \
     overrides=$overrides \
     debug_mode=false \
     use_wandb=true \
     seed=$seed \
-    device=$device"
+    device=$device \
+    overrides.learned_rewards=$learned_rewards"
 
   if [[ "$algorithm" == "ombpo" ]]; then
     cmd+=" \
@@ -99,7 +103,7 @@ submit_slurm_job() {
   local job_script
   job_script=$(mktemp)
 
-  extra_args="device=$device"
+  extra_args="device=$device overrides.learned_rewards=$learned_rewards"
   if [[ "$algorithm" == "ombpo" ]]; then
     extra_args+=" \
       algorithm.percentile=$percentile \
