@@ -12,3 +12,4 @@ omegaconf>=2.0,<2.1
 hydra-core==1.0.3
 mujoco-py==2.1.2.14
 cython<3
+wandb
